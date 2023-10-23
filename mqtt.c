@@ -78,7 +78,7 @@ void MQTT_delivery_complete(void *context, MQTTClient_deliveryToken dt)
 
 int MQTT_pub(MQTTClient client, char * topic, char * msg)
 {
-    int rc;
+    int rc = 0;;
 
     MQTTClient_message pubmsg = MQTTClient_message_initializer;
     pubmsg.payload = msg;
@@ -94,17 +94,19 @@ int MQTT_pub(MQTTClient client, char * topic, char * msg)
     /* If synchronous, uncomment following lines */
     //rc = MQTTClient_waitForCompletion(client, token, TIMEOUT);
     //printf("Message with delivery token %d delivered\n", token);
+
+    return rc;
 }
 
 int MQTT_sub(MQTTClient client, char * topic)
 {
     MQTTClient_subscribe(client, topic, QOS);
+    return 0;
 }
 
 int MQTT_disconnect(MQTTClient client)
 {
     MQTTClient_disconnect(client, 10000);
     MQTTClient_destroy(&client);
+    return 0;
 }
-
-

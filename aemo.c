@@ -47,6 +47,8 @@ int print_aemo_data(struct AEMO *aemo)
 	printf(" Semi Scheduled Generation (Renewable): %.02f MW\r\n",aemo->semischeduledgeneration);
 	printf(" Export: %.02f MW\r\n",aemo->netinterchange);
 	fflush(stdout);
+
+    return 0;
 }
 
 int log_prices_file(FILE *fhandle, struct AEMO *aemo, int number_tries)
@@ -83,20 +85,24 @@ int log_prices_file(FILE *fhandle, struct AEMO *aemo, int number_tries)
 		aemo->semischeduledgeneration);
 
 	fflush(fhandle);
+
+    return 0;
 }
 
 int log_prices_mqtt(MQTTClient client, char * topic, struct AEMO *aemo)
 {
 	unsigned char mqtt_str[800];
 
-	sprintf(mqtt_str,"{\"price\":%.02f,\"totaldemand\":%.02f,\"netinterchange\":%.02f,\"scheduledgeneration\":%.02f,\"semischeduledgeneration\":%.02f}",
-		aemo->price,
+	sprintf((char * restrict)mqtt_str,"{\"price\":%.02f,\"totaldemand\":%.02f,\"netinterchange\":%.02f,\"scheduledgeneration\":%.02f,\"semischeduledgeneration\":%.02f}",
+            aemo->price,
 		aemo->totaldemand,
 		aemo->netinterchange,
 		aemo->scheduledgeneration,
 		aemo->semischeduledgeneration);
 
-		MQTT_pub(client, topic ,mqtt_str);
+    MQTT_pub(client, topic ,(char *)mqtt_str);
+
+    return 0;
 }
 
 void ctrlc_handler(int s) {
@@ -157,17 +163,17 @@ int main(int argc, char **argv)
 		print_usage(basename(argv[0]));
 		exit(1);
 	}
-	
+
 	if (argv[optind] != NULL){
 		nemregion = (char *)argv[optind];
 	}
-	
+
 	printf("Region = %s\r\n", nemregion);
-		
+
 	CURLcode res;
 	unsigned char number_tries;
 
-	char *data;
+	char *data = "";
 
 	struct buffer out_buf = {
 		.data = data,
@@ -175,7 +181,7 @@ int main(int argc, char **argv)
 	};
 
 	struct AEMO aemo;
-	
+
 	time_t now;
 	struct tm timeinfo;
 	int previous_period;
@@ -202,7 +208,7 @@ int main(int argc, char **argv)
 		//printf("Password: %s\r\n",mqttpassword);
 		client = MQTT_connect(mqttbrokerURI, mqttusername, mqttpassword);
 	}
-	
+
 	/* Init CTRL-C handler */
 	exitflag = 0;
 	struct sigaction sigIntHandler;
@@ -287,8 +293,7 @@ int main(int argc, char **argv)
 		}
 		sleep(1);
 	}
-	printf("\r\nClosing...\r\n");	
+	printf("\r\nClosing...\r\n");
 	if (logtofile) fclose(fhandle);
 	if (logtomqtt) MQTT_disconnect(client);
 }
-

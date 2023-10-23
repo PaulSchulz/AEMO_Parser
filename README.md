@@ -1,8 +1,10 @@
 # AEMO <-> MQTT Parser/Connector
-The Australian Energy Market Operator (AEMO) publishes 5 minute settlement data for the National Electricity Market (NEM) in a JSON file located at
+The Australian Energy Market Operator (AEMO) publishes 5 minute settlement data
+for the National Electricity Market (NEM) in a JSON file located at
 https://visualisations.aemo.com.au/aemo/apps/api/report/ELEC_NEM_SUMMARY
 
-This JSON file includes price and generation/demand data useful for making/scripting demand management decisions. 
+This JSON file includes price and generation/demand data useful for
+making/scripting demand management decisions.
 
 ## Usage
 ```
@@ -48,6 +50,8 @@ This code uses the following libraries
 Install using package manager:
 ```
 sudo apt-get install libpaho-mqtt-dev libcurlpp-dev libcjson-dev
+sudo apt-get install libsqlite3-dev
+
 ```
 Or build from code:
 
@@ -60,7 +64,6 @@ $ ./config
 $ make
 $ sudo make install
 ```
-
 ### Install cURL
 ```sh
 $ wget https://curl.se/download/curl-7.81.0.tar.gz
@@ -78,19 +81,17 @@ $ cd cJSON-1.7.15
 $ make
 $ sudo make install
 ```
-
 ### Install paho libraries
-```
+```sh
 $ wget https://github.com/eclipse/paho.mqtt.c/archive/refs/tags/v1.3.9.tar.gz
 $ tar -xzf v1.3.9.tar.gz
 $ cd paho.mqtt.c-1.3.9
 $ make
 $ sudo make install
 ```
-
 ## Potential errors
 ### Error loading shared libraries
-If you get the following error message 
+If you get the following error message
 ```
 error while loading shared libraries: libcjson.so.1: cannot open shared object file: No such file or directory
 ```
@@ -108,6 +109,3 @@ It may be because curl hasn't been compiled with SSL. Run
 $ curl -V
 ```
 and check if https is listed as a protocol. If not, you may not have OpenSSL installed correctly.
-
-
-

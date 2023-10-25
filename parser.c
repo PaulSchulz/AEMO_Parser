@@ -30,14 +30,16 @@ void parse_aemo_request(char *ptr, struct AEMO *aemo, char *region)
 		if (name != NULL) {
 			//printf("Region %s\n",name->valuestring);
 			if (strcmp(name->valuestring, region) == 0) {
-				cJSON *settlement = cJSON_GetObjectItemCaseSensitive(parameter, "SETTLEMENTDATE");
-				if (settlement != NULL) {
-					/* String in the format of 2020-12-19T15:10:00 */
-					if (strptime((char *)settlement->valuestring, "%Y-%m-%dT%H:%M:%S", &aemo->settlement) == NULL)
-						printf("Unable to parse settlement time\r\n");
-				}
+                stpncpy(aemo->region,region,8);
 
-				cJSON *price = cJSON_GetObjectItemCaseSensitive(parameter, "PRICE");
+                cJSON *settlement = cJSON_GetObjectItemCaseSensitive(parameter, "SETTLEMENTDATE");
+                if (settlement != NULL) {
+                    /* String in the format of 2020-12-19T15:10:00 */
+                    if (strptime((char *)settlement->valuestring, "%Y-%m-%dT%H:%M:%S", &aemo->settlement) == NULL)
+                        printf("Unable to parse settlement time\r\n");
+                }
+
+                cJSON *price = cJSON_GetObjectItemCaseSensitive(parameter, "PRICE");
 				if (price != NULL) aemo->price = price->valuedouble;
 				else printf("Can't find %s\r\n", price->string);
 
@@ -62,4 +64,3 @@ void parse_aemo_request(char *ptr, struct AEMO *aemo, char *region)
 
 	cJSON_Delete(NEM);
 }
-

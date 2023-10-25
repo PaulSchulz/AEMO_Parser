@@ -11,6 +11,7 @@
 #include "http.h"
 #include "MQTTClient.h"
 #include "mqtt.h"
+#include "sqlite3.h"
 #include "parser.h"
 
 #define IDLE 	0
@@ -28,6 +29,7 @@ static void print_usage(char *prg)
 	fprintf(stderr, "	-t <topic> 		MQTT topic\n");
 	fprintf(stderr, "	-u <username> 		Username for MQTT Broker\n");
 	fprintf(stderr, "	-p <password> 		Password for MQTT Broker\n");
+    fprintf(stderr, "	-s <filename> 		Log to SQLite3 DB\n");
 	fprintf(stderr, "\n");
 }
 
@@ -37,8 +39,8 @@ int print_aemo_data(struct AEMO *aemo)
 	printf(" Settlement Period: %04d-%02d-%02d %02d:%02d:%02d\r\n",
 		aemo->settlement.tm_year + 1900,
 		aemo->settlement.tm_mon + 1,
-		aemo->settlement.tm_mday,
-		aemo->settlement.tm_hour,
+           aemo->settlement.tm_mday,
+           aemo->settlement.tm_hour,
 		aemo->settlement.tm_min,
 		aemo->settlement.tm_sec);
 	printf(" Price: $%.02f\r\n",aemo->price);
@@ -95,149 +97,173 @@ int log_prices_mqtt(MQTTClient client, char * topic, struct AEMO *aemo)
 
 	sprintf((char * restrict)mqtt_str,"{\"price\":%.02f,\"totaldemand\":%.02f,\"netinterchange\":%.02f,\"scheduledgeneration\":%.02f,\"semischeduledgeneration\":%.02f}",
             aemo->price,
-		aemo->totaldemand,
-		aemo->netinterchange,
-		aemo->scheduledgeneration,
-		aemo->semischeduledgeneration);
+            aemo->totaldemand,
+            aemo->netinterchange,
+            aemo->scheduledgeneration,
+            aemo->semischeduledgeneration);
 
     MQTT_pub(client, topic ,(char *)mqtt_str);
 
     return 0;
 }
 
-void ctrlc_handler(int s) {
-	exitflag = 1;
+
+int log_prices_sqlite3(sqlite3* db, struct AEMO *aemo, int number_tries)
+{
+    aemo_sqlite3_write(db, aemo, number_tries);
+    return 0;
 }
+
+
+void ctrlc_handler(int s) {
+        exitflag = 1;
+    }
 
 int main(int argc, char **argv)
 {
-	char * logfilename = NULL;
-	bool logtofile = false;
+    char * logfilename = NULL;
+    bool logtofile = false;
 
-	char * mqttbrokerURI = NULL;
-	char topic[] = {"electricity/5min"};
-	char * mqtttopic = topic;
-	char * mqttusername = NULL;
-	char * mqttpassword = NULL;
-	char * nemregion = NULL;
-	bool logtomqtt = false;
+    char * mqttbrokerURI = NULL;
+    char topic[] = {"electricity/5min"};
+    char * mqtttopic = topic;
+    char * mqttusername = NULL;
+    char * mqttpassword = NULL;
+    char * nemregion = NULL;
+    bool logtomqtt = false;
 
-	printf("AEMO <-> MQTT Connector\r\n");
+    char * sqlitedb = NULL;
+    bool logtosqlite = false;
 
-	int opt;
+    int opt;
 
-	while ((opt = getopt(argc, argv, "l:m:t:u:p:?")) != -1) {
-		switch (opt) {
-		case 'l':
-			logfilename = (char *)optarg;
-			logtofile = true;
-			break;
+    while ((opt = getopt(argc, argv, "l:m:t:u:p:s:?")) != -1) {
+        switch (opt) {
+        case 'l':
+            logfilename = (char *)optarg;
+            logtofile = true;
+            break;
 
-		case 'm':
-			mqttbrokerURI = (char *)optarg;
-			logtomqtt = true;
-			break;
+            case 'm':
+                mqttbrokerURI = (char *)optarg;
+                logtomqtt = true;
+                break;
 
-		case 't':
-			mqtttopic = (char *)optarg;
-			break;
+            case 't':
+                mqtttopic = (char *)optarg;
+                break;
 
-		case 'u':
-			mqttusername = (char *)optarg;
-			break;
+            case 'u':
+                mqttusername = (char *)optarg;
+                break;
 
-		case 'p':
-			mqttpassword = (char *)optarg;
-			break;
+            case 'p':
+                mqttpassword = (char *)optarg;
+                break;
 
+            case 's':
+                sqlitedb = (char *)optarg;
+                logtosqlite = true;
+                break;
 
-		default:
-			print_usage(basename(argv[0]));
-			exit(1);
-			break;
-		}
-	}
+            default:
+                print_usage(basename(argv[0]));
+                exit(1);
+                break;
+            }
+        }
 
-	if (optind >= argc) {
-		printf("No region specified\r\n");
-		print_usage(basename(argv[0]));
-		exit(1);
-	}
+        if (optind >= argc) {
+            printf("No region specified\r\n");
+            print_usage(basename(argv[0]));
+            exit(1);
+        }
 
-	if (argv[optind] != NULL){
-		nemregion = (char *)argv[optind];
-	}
+        if (argv[optind] != NULL){
+            nemregion = (char *)argv[optind];
+        }
 
-	printf("Region = %s\r\n", nemregion);
+        printf("Region = %s\r\n", nemregion);
 
-	CURLcode res;
-	unsigned char number_tries;
+        if (logtofile) printf("AEMO --> File\r\n");
+        if (logtomqtt) printf("AEMO --> MQTT Connector\r\n");
+        if (logtosqlite) printf("AEMO --> SQLite3 Database File\r\n");
 
-	char *data = "";
+        CURLcode res;
+        unsigned char number_tries;
 
-	struct buffer out_buf = {
-		.data = data,
-		.pos = 0
-	};
+        char *data = NULL;
 
-	struct AEMO aemo;
+        struct buffer out_buf = {
+            .data = data,
+            .pos = 0
+        };
 
-	time_t now;
-	struct tm timeinfo;
-	int previous_period;
+        struct AEMO aemo;
 
-	unsigned int state = IDLE;
+        time_t now;
+        struct tm timeinfo;
+        int previous_period;
 
-	FILE *fhandle;
+        unsigned int state = IDLE;
 
-	if (logtofile) {
-		printf("Logging to %s\r\n",logfilename);
-		fhandle = fopen(logfilename,"a+");
-		if (fhandle == NULL) {
-			printf("Unable to open %s for writing\r\n",logfilename);
-			exit(1);
-		}
-	}
+        FILE *fhandle;
 
-	MQTTClient client;
+        if (logtofile) {
+            printf("Logging to %s\r\n",logfilename);
+            fhandle = fopen(logfilename,"a+");
+            if (fhandle == NULL) {
+                printf("Unable to open %s for writing\r\n",logfilename);
+                exit(1);
+            }
+        }
 
-	if (logtomqtt) {
-		printf("Connecting to broker: %s\r\n",mqttbrokerURI);
-		printf("Publishing to topic: %s\r\n",mqtttopic);
-		if (mqttusername) printf("Username: %s\r\n",mqttusername);
-		//printf("Password: %s\r\n",mqttpassword);
-		client = MQTT_connect(mqttbrokerURI, mqttusername, mqttpassword);
-	}
+        MQTTClient client;
 
-	/* Init CTRL-C handler */
-	exitflag = 0;
-	struct sigaction sigIntHandler;
-	sigIntHandler.sa_handler = ctrlc_handler;
-	sigemptyset(&sigIntHandler.sa_mask);
-	sigIntHandler.sa_flags = 0;
-	sigaction(SIGINT, &sigIntHandler, NULL);
+        if (logtomqtt) {
+            printf("Connecting to broker: %s\r\n",mqttbrokerURI);
+            printf("Publishing to topic: %s\r\n",mqtttopic);
+            if (mqttusername) printf("Username: %s\r\n",mqttusername);
+            //printf("Password: %s\r\n",mqttpassword);
+            client = MQTT_connect(mqttbrokerURI, mqttusername, mqttpassword);
+        }
 
-	/* Populate data */
-	out_buf.data = malloc(16384);
-	out_buf.pos = 0;
+        sqlite3 * db;
+        if (logtosqlite) {
+            printf("Connecting to database file: %s\r\n", sqlitedb);
+            db = aemo_sqlite3_open(sqlitedb);
+            aemo_sqlite3_initialise(db);
+        }
 
-	res = http_json_request(&out_buf);
-	if(res == CURLE_OK) {
-		parse_aemo_request(out_buf.data, &aemo, nemregion);
+        /* Init CTRL-C handler */
+        exitflag = 0;
+        struct sigaction sigIntHandler;
+        sigIntHandler.sa_handler = ctrlc_handler;
+        sigemptyset(&sigIntHandler.sa_mask);
+        sigIntHandler.sa_flags = 0;
+        sigaction(SIGINT, &sigIntHandler, NULL);
 
-		printf("Current settlement period %04d-%02d-%02d %02d:%02d:%02d\r\n",
-			aemo.settlement.tm_year + 1900,
-			aemo.settlement.tm_mon + 1,
-			aemo.settlement.tm_mday,
-			aemo.settlement.tm_hour,
-			aemo.settlement.tm_min,
-			aemo.settlement.tm_sec);
+        /* Populate data */
+        out_buf.data = malloc(16384);
+        out_buf.pos = 0;
 
-		previous_period = aemo.settlement.tm_min;
+        res = http_json_request(&out_buf);
+        if(res == CURLE_OK) {
+            parse_aemo_request(out_buf.data, &aemo, nemregion);
 
-	} else {
-		printf("Failed to download AEMO ELEC_NEM_SUMMARY\r\n");
-	}
+            printf("Current settlement period %04d-%02d-%02d %02d:%02d:%02d\r\n",
+                   aemo.settlement.tm_year + 1900,
+                   aemo.settlement.tm_mon + 1,
+                   aemo.settlement.tm_mday,
+                   aemo.settlement.tm_hour,
+                   aemo.settlement.tm_min,
+                   aemo.settlement.tm_sec);
+
+            previous_period = aemo.settlement.tm_min;
+
+        } else {
+            printf("Failed to download AEMO ELEC_NEM_SUMMARY\r\n");
+        }
 
 	while (!exitflag) {
 
@@ -282,6 +308,7 @@ int main(int argc, char **argv)
 						print_aemo_data(&aemo);
 						if (logtofile) log_prices_file(fhandle, &aemo, number_tries);
 						if (logtomqtt) log_prices_mqtt(client, mqtttopic, &aemo);
+                        if (logtosqlite) log_prices_sqlite3(db, &aemo, number_tries);
 
 						/* Success, go back to IDLE */
 						state = IDLE;

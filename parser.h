@@ -1,5 +1,6 @@
 
 struct AEMO {
+    char   region[8];
 	struct tm settlement;
 	double price;
 	double totaldemand;

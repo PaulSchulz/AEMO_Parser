@@ -1,6 +1,6 @@
 #include <sqlite3.h>
 
-// #include "parser.h"
+#include "parser.h"
 #define SQLITEDB "aemo.db"
 
 sqlite3* aemo_sqlite3_open(char* database);

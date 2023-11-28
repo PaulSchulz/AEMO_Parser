@@ -1,3 +1,5 @@
+#ifndef PARSER_H
+#define PARSER_H
 
 struct AEMO {
     char   region[8];
@@ -10,3 +12,5 @@ struct AEMO {
 };
 
 void parse_aemo_request(char *ptr, struct AEMO *aemo, char *region);
+
+#endif

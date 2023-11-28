@@ -20,6 +20,8 @@ Options:
 	-t <topic>       MQTT topic
 	-u <username>    Username for MQTT Broker
 	-p <password>    Password for MQTT Broker
+    -s <filename>    Log to SQLite3 DB
+
 ```
 
 ## Log File Format
@@ -46,9 +48,10 @@ This code uses the following libraries
 * cJSON (https://github.com/DaveGamble/cJSON)
 * Eclipse paho MQTT library (https://www.eclipse.org/paho/)
   * Requires OpenSSL
+* SQLite3 (https://www.sqlite.org/)
 
 Install using package manager:
-```
+```sh
 sudo apt-get install libpaho-mqtt-dev libcurlpp-dev libcjson-dev
 sudo apt-get install libsqlite3-dev
 
@@ -89,6 +92,9 @@ $ cd paho.mqtt.c-1.3.9
 $ make
 $ sudo make install
 ```
+### Install SQLite library
+TBD
+
 ## Potential errors
 ### Error loading shared libraries
 If you get the following error message

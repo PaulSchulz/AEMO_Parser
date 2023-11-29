@@ -39,6 +39,7 @@ int aemo_sqlite3_initialise(sqlite3* db)
         fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
         sqlite3_close(db);
         return 1;
+
     }
 
     const char *tableName = "aemo"; // Replace with the name of the table you want to check
@@ -47,10 +48,9 @@ int aemo_sqlite3_initialise(sqlite3* db)
 
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW) {
-        printf("Table exists: %s\n", tableName);
+        printf("# Table exists: %s\n", tableName);
 
     } else {
-
         printf("Table does not exist.\n");
         printf("Creating table: %s\n", tableName);
 
@@ -181,9 +181,17 @@ int aemo_sqlite3_write(sqlite3* db, struct AEMO * aemo, int number_tries)
 
     // Finalize the statement and close the database
     // sqlite3_finalize(stmt);
+    return 0;
+}
+
+int aemo_all_sqlite3_write(sqlite3* db, struct AEMO_ALL* aemo_all) {
+    for(int i=0; i<MAX_REGIONS; i++) {
+        aemo_sqlite3_write(db, &(aemo_all->region[i]), aemo_all->number_tries);
+    }
 
     return 0;
 }
+
 
 int aemo_sqlite3_close(sqlite3* db)
 {

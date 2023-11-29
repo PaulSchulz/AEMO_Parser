@@ -10,21 +10,21 @@ char *strptime(const char *s, const char *format, struct tm *tm);
 void parse_aemo_request(char *ptr, struct AEMO *aemo, char *region)
 {
 	const cJSON *regions;
-	const cJSON *parameter;
+    const cJSON *parameter;
 
-	cJSON *NEM = cJSON_Parse(ptr);
-	if (NEM == NULL) {
-		printf("Unable to parse JSON file\r\n");
-		return;
-	}
+    cJSON *NEM = cJSON_Parse(ptr);
+    if (NEM == NULL) {
+	    printf("Unable to parse JSON file\r\n");
+	    return;
+    }
 
-	regions = cJSON_GetObjectItemCaseSensitive(NEM, "ELEC_NEM_SUMMARY");
-	if (regions == NULL) {
-		printf("Cannot find ELEC_NEM_SUMMARY object\r\n");
-		return;
-	}
+    regions = cJSON_GetObjectItemCaseSensitive(NEM, "ELEC_NEM_SUMMARY");
+    if (regions == NULL) {
+	    printf("Cannot find ELEC_NEM_SUMMARY object\r\n");
+	    return;
+    }
 
-	cJSON_ArrayForEach(parameter, regions)
+    cJSON_ArrayForEach(parameter, regions)
 	{
 		cJSON *name = cJSON_GetObjectItemCaseSensitive(parameter, "REGIONID");
 		if (name != NULL) {
@@ -59,6 +59,70 @@ void parse_aemo_request(char *ptr, struct AEMO *aemo, char *region)
 				if (semischeduledgeneration != NULL) aemo->semischeduledgeneration = semischeduledgeneration->valuedouble;
 				else printf("Can't find %s\r\n", semischeduledgeneration->string);
 			}
+		}
+	}
+
+	cJSON_Delete(NEM);
+}
+
+// Parse all AEMO data
+void parse_aemo_request_all(char *ptr, struct AEMO_ALL *aemo_all)
+{
+	const cJSON *regions;
+    const cJSON *parameter;
+    struct AEMO *aemo = NULL;
+
+    cJSON *NEM = cJSON_Parse(ptr);
+    if (NEM == NULL) {
+	    printf("Unable to parse JSON file\r\n");
+	    return;
+    }
+
+    regions = cJSON_GetObjectItemCaseSensitive(NEM, "ELEC_NEM_SUMMARY");
+    if (regions == NULL) {
+	    printf("Cannot find ELEC_NEM_SUMMARY object\r\n");
+	    return;
+    }
+
+    int index=0;
+    cJSON_ArrayForEach(parameter, regions)
+	{
+        aemo = &(aemo_all->region[index]);
+
+        cJSON *name = cJSON_GetObjectItemCaseSensitive(parameter, "REGIONID");
+		if (name != NULL) {
+			// printf("Region %s\n",name->valuestring);
+            // stpncpy(aemo->region,region,8);
+            stpncpy(aemo->region,name->valuestring,8);
+
+            cJSON *settlement = cJSON_GetObjectItemCaseSensitive(parameter, "SETTLEMENTDATE");
+            if (settlement != NULL) {
+                /* String in the format of 2020-12-19T15:10:00 */
+                if (strptime((char *)settlement->valuestring, "%Y-%m-%dT%H:%M:%S", &aemo->settlement) == NULL)
+                    printf("Unable to parse settlement time\r\n");
+            }
+
+            cJSON *price = cJSON_GetObjectItemCaseSensitive(parameter, "PRICE");
+			if (price != NULL) aemo->price = price->valuedouble;
+			else printf("Can't find %s\r\n", price->string);
+
+			cJSON *totaldemand = cJSON_GetObjectItemCaseSensitive(parameter, "TOTALDEMAND");
+			if (totaldemand != NULL) aemo->totaldemand = totaldemand->valuedouble;
+			else printf("Can't find %s\r\n", totaldemand->string);
+
+			cJSON *netinterchange = cJSON_GetObjectItemCaseSensitive(parameter, "NETINTERCHANGE");
+			if (netinterchange != NULL) aemo->netinterchange = netinterchange->valuedouble;
+			else printf("Can't find %s\r\n", netinterchange->string);
+
+			cJSON *scheduledgeneration = cJSON_GetObjectItemCaseSensitive(parameter, "SCHEDULEDGENERATION");
+			if (scheduledgeneration != NULL) aemo->scheduledgeneration = scheduledgeneration->valuedouble;
+			else printf("Can't find %s\r\n", scheduledgeneration->string);
+
+			cJSON *semischeduledgeneration = cJSON_GetObjectItemCaseSensitive(parameter, "SEMISCHEDULEDGENERATION");
+			if (semischeduledgeneration != NULL) aemo->semischeduledgeneration = semischeduledgeneration->valuedouble;
+			else printf("Can't find %s\r\n", semischeduledgeneration->string);
+
+            index++;
 		}
 	}
 

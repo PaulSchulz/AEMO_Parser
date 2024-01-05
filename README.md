@@ -15,11 +15,11 @@ Usage: aemo region [options]
 Regions: NSW1, QLD1, SA1, TAS1, VIC1
 
 Options:
-	-l <filename>    Log to file
-	-m <broker URI>  Log to MQTT Broker
-	-t <topic>       MQTT topic
-	-u <username>    Username for MQTT Broker
-	-p <password>    Password for MQTT Broker
+    -l <filename>    Log to file
+    -m <broker URI>  Log to MQTT Broker
+    -t <topic>       MQTT topic
+    -u <username>    Username for MQTT Broker
+    -p <password>    Password for MQTT Broker
     -s <filename>    Log to SQLite3 DB
 
 ```

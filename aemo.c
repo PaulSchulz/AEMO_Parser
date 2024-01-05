@@ -1,3 +1,6 @@
+/* AEMO Parser */
+// Download AEMO NEM Data. Parse ands Store this data.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,9 +27,11 @@ bool exitflag;
 
 static void print_usage(char *prg)
 {
-	fprintf(stderr, "Usage: %s region [options]\n\n",prg);
-	fprintf(stderr, "Regions: NSW1, QLD1, SA1, TAS1, VIC1\n\n");
+	// fprintf(stderr, "Usage: %s region [options]\n\n",prg);
+	// fprintf(stderr, "Regions: NSW1, QLD1, SA1, TAS1, VIC1\n\n");
+    fprintf(stderr, "Usage: %s [options]\n\n", prg);
 	fprintf(stderr, "Options:\n");
+    fprintf(stderr, "   -q                  Quiet mode (suppress output)\n");
 	fprintf(stderr, "	-l <filename> 		Log to file\n");
 	fprintf(stderr, "	-m <broker URI> 	Log to MQTT Broker\n");
 	fprintf(stderr, "	-t <topic> 		MQTT topic\n");
@@ -81,13 +86,13 @@ void print_aemo_parser_header (void) {
 
 void print_aemo_data_header () {
     printf("#\n");
-	printf("# Timestamp            Reg    Settlement               Price     Demand        Sch    SemiSch    Export\n");
-    printf("#                                                        ($)       (MW)       (MW)       (MW)      (MW)\n");
-    printf("# -------------------+------+---------------------+----------+----------+----------+----------+----------\n");
+	printf("# Timestamp           | Reg  | Settlement          |    Price |   Demand |      Sch |  SemiSch |  Export |\n");
+    printf("#                     |      |                     |  ($/MWh) |     (MW) |     (MW) |     (MW) |    (MW) |\n");
+    printf("# --------------------+------+---------------------+----------+----------+----------+----------+---------+\n");
 }
 
 void print_aemo_data_record (struct AEMO *aemo) {
-    printf(" %04d-%02d-%02d %02d:%02d:%02d | %-4s | %04d-%02d-%02d %02d:%02d:%02d | %8.02f | %8.02f | %8.02f | %8.02f | %8.02f\n",
+    printf("  %04d-%02d-%02d %02d:%02d:%02d | %-4s | %04d-%02d-%02d %02d:%02d:%02d | %8.02f | %8.02f | %8.02f | %8.02f | %8.02f |\n",
            aemo->timestamp.tm_year + 1900,
 	       aemo->timestamp.tm_mon + 1,
 	       aemo->timestamp.tm_mday,
@@ -110,7 +115,7 @@ void print_aemo_data_record (struct AEMO *aemo) {
 
 int print_aemo_all_data_record (struct AEMO_ALL *aemo_all) {
     for (int i=0; i<MAX_REGIONS; i++) {
-        //print_aemo_data_record(&aemo_all->region[i]);
+        print_aemo_data_record(&aemo_all->region[i]);
     }
 
     fflush(stdout);
@@ -190,6 +195,8 @@ void ctrlc_handler(int s) {
 }
 
 int main(int argc, char **argv) {
+    bool quiet = false;
+
     char * logfilename = NULL;
     bool logtofile = false;
 
@@ -198,18 +205,23 @@ int main(int argc, char **argv) {
     char * mqtttopic = topic;
     char * mqttusername = NULL;
     char * mqttpassword = NULL;
-    char * nemregion = NULL;
+    // char * nemregion = NULL;
     bool logtomqtt = false;
 
     char * sqlitedb = NULL;
     bool logtosqlite = false;
 
-    int verbose = 1;
+    int verbose = 0;  // 0:No extra message, 1:Event Messages, 2:Debug Messages
 
     int opt;
 
-    while ((opt = getopt(argc, argv, "l:m:t:u:p:s:?")) != -1) {
+    while ((opt = getopt(argc, argv, "q:l:m:t:u:p:s:?")) != -1) {
         switch (opt) {
+        case 'q':
+            logfilename = (char *)optarg;
+            quiet = true;
+            break;
+
         case 'l':
             logfilename = (char *)optarg;
             logtofile = true;
@@ -244,27 +256,28 @@ int main(int argc, char **argv) {
         }
     }
 
-    print_aemo_parser_header();
+    if (!quiet) print_aemo_parser_header();
 
-    if (optind >= argc) {
-        printf("No region specified\r\n");
-        print_usage(basename(argv[0]));
-        exit(1);
+    //    if (optind >= argc) {
+    //printf("No region specified\r\n");
+    //print_usage(basename(argv[0]));
+    //exit(1);
+    //}
+
+    //if (argv[optind] != NULL){
+    //nemregion = (char *)argv[optind];
+    //}
+
+    if(!quiet) {
+        if (logtofile) printf("# AEMO --> File\n");
+        if (logtomqtt) printf("# AEMO --> MQTT Connector\n");
+        if (logtosqlite) printf("# AEMO --> SQLite3 Database File\n");
+
+        // printf("# Region:       %4s\n", nemregion);
+        printf("# Loop delay:   %4d s\n",   DELAY_LOOP);
+        printf("# Retry delay:  %4d s\n",  DELAY_RETRY);
+        printf("# Check offset: %4d s\n", OFFSET_CHECK);
     }
-
-    if (argv[optind] != NULL){
-        nemregion = (char *)argv[optind];
-    }
-
-    if (logtofile) printf("# AEMO --> File\n");
-    if (logtomqtt) printf("# AEMO --> MQTT Connector\n");
-    if (logtosqlite) printf("# AEMO --> SQLite3 Database File\n");
-
-    printf("# Region:       %4s\n", nemregion);
-
-    printf("# Loop delay:   %4d s\n",   DELAY_LOOP);
-    printf("# Retry delay:  %4d s\n",  DELAY_RETRY);
-    printf("# Check offset: %4d s\n", OFFSET_CHECK);
 
     CURLcode res;
     unsigned char number_tries;
@@ -330,25 +343,31 @@ int main(int argc, char **argv) {
     res = http_json_request(&out_buf);
     if(res == CURLE_OK) {
         parse_aemo_request_all(out_buf.data, &aemo_all);
-        parse_aemo_request(out_buf.data, &aemo, nemregion);
+        // parse_aemo_request(out_buf.data, &aemo, nemregion);
 
-        printf("# Current settlement period ends: %04d-%02d-%02d %02d:%02d:%02d\r\n",
+        // Pointer to first record for time data.
+        aemo = aemo_all.region[0];
+
+        if(!quiet) {
+            printf("# Current settlement period ends: %04d-%02d-%02d %02d:%02d:%02d\r\n",
                aemo.settlement.tm_year + 1900,
                aemo.settlement.tm_mon + 1,
                aemo.settlement.tm_mday,
                aemo.settlement.tm_hour,
                aemo.settlement.tm_min,
                aemo.settlement.tm_sec);
+        }
 
         previous_period = aemo.settlement.tm_min;
 
-        print_aemo_data_header();
-
+        if(!quiet) {
+            print_aemo_data_header();
+        }
     } else {
         printf("Error: Failed to download AEMO ELEC_NEM_SUMMARY\r\n");
     }
 
-	while (!exitflag) {
+    while (!exitflag) {
 		/* Get Time */
 		time(&now);
 		localtime_r(&now, &timeinfo);
@@ -363,7 +382,7 @@ int main(int argc, char **argv) {
 				state = FETCH;
 				number_tries = 0;
 
-                if (verbose != 0) {
+                if (verbose > 0) {
 				    printf("# Fetching data for next settlement period. ");
                     // Dots will be placed after this to count fetch requests.
                 }
@@ -384,7 +403,7 @@ int main(int argc, char **argv) {
 			/* Fetch JSON file */
 			res = http_json_request(&out_buf);
 			if(res == CURLE_OK) {
-                if (verbose != 0) {
+                if (verbose > 0) {
                     // Print a dot each time we make a HTTP request
                     printf(".");
                     fflush(stdout);
@@ -392,12 +411,13 @@ int main(int argc, char **argv) {
                 number_tries++;
 
                 // If HTTP request was successful, parse request
-                parse_aemo_request(out_buf.data, &aemo, nemregion);
+                // parse_aemo_request(out_buf.data, &aemo, nemregion);
                 parse_aemo_request_all(out_buf.data, &aemo_all);
+                aemo = aemo_all.region[0];
 
                 // Set timestamp
-		        time(&now);
-		        localtime_r(&now, &timeinfo);
+                time(&now);
+                localtime_r(&now, &timeinfo);
 
                 aemo.timestamp.tm_year = timeinfo.tm_year;
                 aemo.timestamp.tm_mon  = timeinfo.tm_mon;
@@ -415,14 +435,14 @@ int main(int argc, char **argv) {
                 }
 
                 if (aemo.settlement.tm_min != previous_period) {
-	                // Settlement time ha chnaged - new record.
+	                // Settlement time has changed - new record received
 	                previous_period = aemo.settlement.tm_min;
 
-                    if (verbose != 0) {
+                    if (verbose >= 1) {
                         printf("\n");
                     };
 
-                    if (verbose != 0) {
+                    if (verbose >= 2) {
                         printf("# %04d-%02d-%02d %02d:%02d:%02d ",
                                aemo.timestamp.tm_year + 1900,
                                aemo.timestamp.tm_mon + 1,
@@ -430,7 +450,6 @@ int main(int argc, char **argv) {
                                aemo.timestamp.tm_hour,
                                aemo.timestamp.tm_min,
                                aemo.timestamp.tm_sec);
-
                         printf(" %s", aemo.region);
                         print_aemo_data(&aemo);
                     }

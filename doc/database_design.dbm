@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+CAUTION: Do not modify this file unless you know what you are doing.
+ Unexpected results may occur if the code is changed deliberately.
+-->
+<dbmodel pgmodeler-ver="1.0.0-beta1" use-changelog="false" last-position="0,0" last-zoom="0.85" max-obj-count="4"
+	 default-schema="public" default-owner="postgres"
+	 layers="Default layer"
+	 active-layers="0"
+	 layer-name-colors="#000000"
+	 layer-rect-colors="#b4b4b4"
+	 show-layer-names="false" show-layer-rects="false">
+<database name="aemo" is-template="false" allow-conns="true">
+</database>
+
+<schema name="public" layers="0" fill-color="#e1e1e1" sql-disabled="true">
+</schema>
+
+<table name="aemo" layers="0" collapse-mode="2" max-obj-count="12" z-value="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<position x="4.11765" y="6.47059"/>
+	<column name="region_id" not-null="true">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="settlement" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="price">
+		<type name="real" length="0"/>
+	</column>
+	<column name="total_demand">
+		<type name="real" length="0"/>
+	</column>
+	<column name="net_interchange">
+		<type name="real" length="0"/>
+	</column>
+	<column name="scheduled_generation">
+		<type name="real" length="0"/>
+	</column>
+	<column name="sem_scheduled_generation">
+		<type name="real" length="0"/>
+	</column>
+	<column name="sha256">
+		<type name="text" length="0"/>
+	</column>
+	<column name="running_sha256">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="aemo_pk" type="pk-constr" table="public.aemo">
+		<columns names="region_id,settlement" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="region" layers="0" collapse-mode="1" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<position x="359.391" y="325.693"/>
+	<column name="region_id" not-null="true">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="region">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="regions_pk" type="pk-constr" table="public.region">
+		<columns names="region_id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="process_data" layers="0" collapse-mode="2" max-obj-count="7" z-value="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<position x="272.696" y="561.049"/>
+	<column name="region_id" not-null="true">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="settlement" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="timestamp">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="tries">
+		<type name="smallint" length="0"/>
+	</column>
+	<constraint name="process_data_pk" type="pk-constr" table="public.process_data">
+		<columns names="region_id,settlement" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="checksum" layers="0" collapse-mode="2" max-obj-count="7" z-value="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<position x="2.23276" y="561.37"/>
+	<column name="region_id" not-null="true">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="settlement" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="sha256">
+		<type name="text" length="0"/>
+	</column>
+	<column name="running_sha256">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="checksum_pk" type="pk-constr" table="public.checksum">
+		<columns names="region_id,settlement" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<relationship name="region_has_many_aemo" type="rel1n" layers="0"
+	 src-col-pattern="{sc}_{st}"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="{st}_fk"
+	 custom-color="#0c45d4"
+	 src-table="public.region"
+	 dst-table="public.aemo"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="aemo_has_one_process_data" type="rel11" layers="0"
+	 src-col-pattern="{sc}_{st}"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="{st}_fk"
+	 custom-color="#4fc2c6"
+	 src-table="public.process_data"
+	 dst-table="public.aemo"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="aemo_has_one_checksum" type="rel11" layers="0"
+	 src-col-pattern="{sc}_{st}"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="{st}_fk"
+	 custom-color="#0689ef"
+	 src-table="public.checksum"
+	 dst-table="public.aemo"
+	 src-required="false" dst-required="true"/>
+
+<view name="records" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<position x="641.176" y="30.5882"/>
+	<reference table="public.aemo"/>
+	<reference table="public.region"/>
+	<expression type="select-exp">0,1</expression>
+	<expression type="from-exp">0,1</expression>
+	<expression type="simple-exp">0,1</expression>
+	<expression type="end-exp">0,1</expression>
+</view>
+
+<relationship name="rel_records_aemo" type="reltv" layers="0"
+	 src-table="public.records"
+	 dst-table="public.aemo"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_records_region" type="reltv" layers="0"
+	 src-table="public.records"
+	 dst-table="public.region"
+	 src-required="false" dst-required="false"/>
+
+</dbmodel>

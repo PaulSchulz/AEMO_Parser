@@ -66,7 +66,9 @@ int aemo_sqlite3_initialise(sqlite3* db)
             "total_demand REAL,"
             "net_interchange REAL,"
             "scheduled_generation REAL,"
-            "semi_scheduled_generation REAL);";
+            "semi_scheduled_generation REAL,"
+            "sha256 TEXT default '',"
+            "running_sha256 TEXT default '');";
 
         rc = sqlite3_exec(db, sqlstatement, 0, 0, 0);
         if (rc != SQLITE_OK) {

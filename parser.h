@@ -2,7 +2,7 @@
 #define PARSER_H
 
 struct AEMO {
-    struct tm timestamp;;
+    struct tm timestamp;
     char   region[8];
 	struct tm settlement;
 	double price;
@@ -22,4 +22,4 @@ struct AEMO_ALL {
 void parse_aemo_request(char *ptr, struct AEMO *aemo, char *region);
 void parse_aemo_request_all(char *ptr, struct AEMO_ALL *aemo_all);
 
-#endif
+#endif // PARSER_H

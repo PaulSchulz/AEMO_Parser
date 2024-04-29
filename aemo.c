@@ -34,6 +34,9 @@
 bool exitflag;
 
 //////////////////////////////////////////////////////////////////////////////
+#define PATHSIZE 256
+char dir_path[PATHSIZE];
+
 // This needs to be big enough to convince the parser that the 'sprintf' format
 // won't overflow these strings. Only need to be 19 characters long.
 #define TIMESTRINGSIZE 100
@@ -41,6 +44,7 @@ char query_time[TIMESTRINGSIZE];
 char settlement_time[TIMESTRINGSIZE];
 char settlement_time_tag[TIMESTRINGSIZE];
 char file_path[TIMESTRINGSIZE+5]; // .json
+
 
 //////////////////////////////////////////////////////////////////////////////
 // Utilities
@@ -107,6 +111,7 @@ char * format_time_tag(char * buffer, struct tm * time_value){
 }
 
 //////////////////////////////////////////////////////////////////////////////
+// Write JSON data out, nicely formatted.
 int write_json_data_to_file(char * filename,
                             char * data) {
 
@@ -146,18 +151,16 @@ int write_json_data_to_file(char * filename,
 //////////////////////////////////////////////////////////////////////////////
 static void print_usage(char *prg)
 {
-	// fprintf(stderr, "Usage: %s region [options]\n\n",prg);
-	// fprintf(stderr, "Regions: NSW1, QLD1, SA1, TAS1, VIC1\n\n");
-    fprintf(stderr, "Usage: %s [options]\n\n", prg);
+	fprintf(stderr, "Usage: %s [options]\n\n", prg);
 	fprintf(stderr, "Options:\n");
-    fprintf(stderr, "   -q                  Quiet mode (suppress output)\n");
-	fprintf(stderr, "	-l <filename> 		Log to file\n");
-	fprintf(stderr, "	-m <broker URI> 	Log to MQTT Broker\n");
-	fprintf(stderr, "	-t <topic> 		MQTT topic\n");
-	fprintf(stderr, "	-u <username> 		Username for MQTT Broker\n");
-	fprintf(stderr, "	-p <password> 		Password for MQTT Broker\n");
-    fprintf(stderr, "	-s <filename> 		Log to SQLite3 DB\n");
-    fprintf(stderr, "	-j <directory> 		Save JSON data to directory\n");
+    fprintf(stderr, "   -q                 Quiet mode (suppress output)\n");
+	fprintf(stderr, "   -l <filename>      Log to file\n");
+	fprintf(stderr, "   -m <broker URI>    Log to MQTT Broker\n");
+	fprintf(stderr, "   -t <topic>         MQTT topic\n");
+	fprintf(stderr, "   -u <username>      Username for MQTT Broker\n");
+	fprintf(stderr, "   -p <password>      Password for MQTT Broker\n");
+    fprintf(stderr, "   -s <filename>      Log to SQLite3 DB\n");
+    fprintf(stderr, "   -j <directory>     Save JSON data to directory\n");
 	fprintf(stderr, "\n");
 }
 
@@ -324,6 +327,8 @@ int main(int argc, char **argv) {
     // char * nemregion = NULL;
     bool logtomqtt = false;
 
+    // FUEL MQTT Logging
+
     char * sqlitedb = NULL;
     bool logtosqlite = false;
 
@@ -372,7 +377,7 @@ int main(int argc, char **argv) {
             jsondatadir = (char *)optarg;
             logjsondata = true;
 
-            printf("### Logging JSON to %s\n", jsondatadir);
+            printf("### Logging JSON to '%s'\n", jsondatadir);
 
             break;
 
@@ -399,7 +404,7 @@ int main(int argc, char **argv) {
         if (logtofile) printf("# AEMO --> File\n");
         if (logtomqtt) printf("# AEMO --> MQTT Connector\n");
         if (logtosqlite) printf("# AEMO --> SQLite3 Database File\n");
-        if (logjsondata) printf("# AEMO --> JSON Data Directory\n");
+        if (logjsondata) printf("# AEMO --> JSON Data Directory (%s)\n",jsondatadir);
 
         // printf("# Region:       %4s\n", nemregion);
         printf("# Loop delay:   %4d s\n",   DELAY_LOOP);
@@ -410,6 +415,7 @@ int main(int argc, char **argv) {
     CURLcode res;
     unsigned char number_tries;
 
+    // JSON quuey data
     char *data = NULL;
 
     struct buffer out_buf = {
@@ -455,7 +461,25 @@ int main(int argc, char **argv) {
     if (logjsondata) {
         // Create data directory
         if (create_directory(jsondatadir) != 0) {
-            fprintf(stderr, "Error creating directory\n");
+            fprintf(stderr, "Error creating directory: %s\n", jsondatadir);
+            return EXIT_FAILURE;
+        }
+
+        snprintf(dir_path, PATHSIZE, "%s/%s",
+                 jsondatadir,
+                 "ELEC_NEM_SUMMARY"
+                 );
+        if (create_directory(dir_path) != 0) {
+            fprintf(stderr, "Error creating directory: %s\n", dir_path);
+            return EXIT_FAILURE;
+        }
+
+        snprintf(dir_path, PATHSIZE, "%s/%s",
+                 jsondatadir,
+                 "FUEL"
+                 );
+        if (create_directory(dir_path) != 0) {
+            fprintf(stderr, "Error creating directory: %s\n", dir_path);
             return EXIT_FAILURE;
         }
     }
@@ -468,9 +492,9 @@ int main(int argc, char **argv) {
     sigIntHandler.sa_flags = 0;
     sigaction(SIGINT, &sigIntHandler, NULL);
 
-
+    //////////////////////////////////////////////////////////////////////////
     // Fetch first data - get current settlement period.
-    // Populate data
+    // Wholesale price data
     out_buf.data = malloc(16384);
     out_buf.pos = 0;
 
@@ -486,150 +510,224 @@ int main(int argc, char **argv) {
         format_time_tag((char *)&settlement_time_tag, &(aemo.settlement));
 
         // Save data to file in dir
-        if (logjsondata) {
-            snprintf(file_path, 110, "%s/%s.json",
-                     jsondatadir,
-                     (char *)&settlement_time_tag
-                     );
-
-            write_json_data_to_file(file_path, out_buf.data);
-        }
+        //if (logjsondata) {
+        //snprintf(file_path, 110, "%s/%s.json",
+        //          jsondatadir,
+        //           (char *)&settlement_time_tag
+        // );
+        //
+        //write_json_data_to_file(file_path, out_buf.data);
+        //}
 
         if(!quiet) {
             printf("# Current settlement period ends: %s\n", settlement_time);
         }
 
-        // For tracking when data changes.
-        previous_period = aemo.settlement.tm_min;
-
         if(!quiet) {
             print_aemo_data_header();
         }
 
+        if (logjsondata) {
+            snprintf(file_path, 200, "%s/%s/%s.json",
+                     jsondatadir,
+                     "ELEC_NEM_SUMMARY",
+                     (char *)&settlement_time_tag
+                     );
+            write_json_data_to_file(file_path, out_buf.data);
+        }
+
+        // For tracking when data changes.
+        previous_period = aemo.settlement.tm_min;
+
     } else {
-        printf("Error: Failed to download AEMO ELEC_NEM_SUMMARY\r\n");
+        printf("Error: Failed to download AEMO ELEC_NEM_SUMMARY report.\n");
     }
+    free(out_buf.data);
+
+    // Fuel mix data
+    out_buf.data = malloc(16384);
+    out_buf.pos = 0;
+
+    res = http_json_request_fuel(&out_buf);
+    if(res == CURLE_OK) {
+        // Save JSON data to file,
+        // uses time tag from previous request.
+        // This is OK for first data request.
+        if (logjsondata) {
+            snprintf(file_path, 200, "%s/%s/%s.json",
+                     jsondatadir,
+                     "FUEL",
+                     (char *)&settlement_time_tag
+                     );
+            write_json_data_to_file(file_path, out_buf.data);
+        }
+    } else {
+        printf("Error: Failed to download FUEL report.\n");
+    }
+    free(out_buf.data);
 
     while (!exitflag) {
-		    /* Get Time */
-		    time(&now);
-		    localtime_r(&now, &timeinfo);
+		/* Get Time */
+		time(&now);
+		localtime_r(&now, &timeinfo);
 
-		    switch (state) {
+		switch (state) {
 
-		    case IDLE:
-                // 20 seconds after a 5 minute period, start fetching a new JSON file
-                // Independant of time zone
+		case IDLE:
+            // 20 seconds after a 5 minute period, start fetching a new JSON file
+            // Independant of time zone
 
-			    if ((!(timeinfo.tm_min % 5)) & (timeinfo.tm_sec == OFFSET_CHECK)) {
-				    state = FETCH;
-				    number_tries = 0;
+			if ((!(timeinfo.tm_min % 5)) & (timeinfo.tm_sec == OFFSET_CHECK)) {
+				state = FETCH;
+				number_tries = 0;
 
-                    if (verbose > 0) {
-				        printf("# Fetching data for next settlement period. ");
-                        // Dots will be placed after this to count fetch requests.
-                    }
-				    // Continue to next case if state changed to FETCH
-			        // break;
-                } else {
-                    break;
+                if (verbose > 0) {
+				    printf("# Fetching data for next settlement period. ");
+                    // Dots will be placed after this to count fetch requests.
+                }
+				// Continue to next case if state changed to FETCH
+			    // break;
+            } else {
+                break;
+            }
+
+		case FETCH:
+			// Start fetching JSON data. We keep trying every 5 seconds until
+			// the settlement time is different from the previous period
+
+			// Allocate a modest buffer now, we can realloc later if needed
+			out_buf.data = malloc(16384);
+			out_buf.pos = 0;
+
+			/* Fetch JSON file - and extract settlement time*/
+			res = http_json_request(&out_buf);
+			if(res == CURLE_OK) {
+                if (verbose > 0) {
+                    // Print a dot each time we make a HTTP request
+                    printf(".");
+                    fflush(stdout);
+                }
+                number_tries++;
+
+                // If HTTP request was successful, parse request
+                // parse_aemo_request(out_buf.data, &aemo, nemregion);
+                parse_aemo_request_all(out_buf.data, &aemo_all);
+                aemo = aemo_all.region[0];
+
+                // Set timestamp
+                time(&now);
+                localtime_r(&now, &timeinfo);
+
+                aemo.timestamp.tm_year = timeinfo.tm_year;
+                aemo.timestamp.tm_mon  = timeinfo.tm_mon;
+                aemo.timestamp.tm_mday = timeinfo.tm_mday;
+                aemo.timestamp.tm_hour = timeinfo.tm_hour;
+                aemo.timestamp.tm_min  = timeinfo.tm_min;
+                aemo.timestamp.tm_sec  = timeinfo.tm_sec;
+                for (int i=0; i<MAX_REGIONS; i++) {
+                    aemo_all.region[i].timestamp.tm_year = timeinfo.tm_year;
+                    aemo_all.region[i].timestamp.tm_mon  = timeinfo.tm_mon;
+                    aemo_all.region[i].timestamp.tm_mday = timeinfo.tm_mday;
+                    aemo_all.region[i].timestamp.tm_hour = timeinfo.tm_hour;
+                    aemo_all.region[i].timestamp.tm_min  = timeinfo.tm_min;
+                    aemo_all.region[i].timestamp.tm_sec  = timeinfo.tm_sec;
                 }
 
-		    case FETCH:
-			    /* Start fetching a new JSON file. We keep trying every 5 seconds until */
-			    /* the settlement time is different from the previous period */
+                if (aemo.settlement.tm_min != previous_period) {
+	                // Settlement time has changed - new record received
 
-			    /* Allocate a modest buffer now, we can realloc later if needed */
-			    out_buf.data = malloc(16384);
-			    out_buf.pos = 0;
+                    if (verbose >= 1) {
+                        printf("\n");
+                    };
 
-			    /* Fetch JSON file */
-			    res = http_json_request(&out_buf);
-			    if(res == CURLE_OK) {
+                    if (verbose >= 2) {
+                        printf("# %04d-%02d-%02d %02d:%02d:%02d ",
+                               aemo.timestamp.tm_year + 1900,
+                               aemo.timestamp.tm_mon + 1,
+                               aemo.timestamp.tm_mday,
+                               aemo.timestamp.tm_hour,
+                               aemo.timestamp.tm_min,
+                               aemo.timestamp.tm_sec);
+                        printf(" %s", aemo.region);
+                        print_aemo_data(&aemo);
+                    }
+
+                    format_time((char *)&settlement_time, &(aemo.settlement));
+                    format_time_tag((char *)&settlement_time_tag, &(aemo.settlement));
+
+                    // Print_aemo_data_record(&aemo);
+                    print_aemo_all_data_record(&aemo_all);
+
+                    if (logtofile) log_prices_file(fhandle, &aemo, number_tries);
+                    if (logtomqtt) log_prices_mqtt(client, mqtttopic, &aemo);
+                    if (logtosqlite) {
+                        aemo_all.number_tries = number_tries;
+                        log_aemo_all_sqlite3(db, &aemo_all);
+                    }
+
+                    // Save JSON data to file
+                    if (logjsondata) {
+                        snprintf(file_path, 200, "%s/%s/%s.json",
+                                 jsondatadir,
+                                 "ELEC_NEM_SUMMARY",
+                                 (char *)&settlement_time_tag
+                                 );
+
+                        write_json_data_to_file(file_path, out_buf.data);
+                    }
+
+                    // Success, go back to IDLE
+	                state = IDLE;
+                } // if(res == CURLE_OK)
+            }
+            free(out_buf.data);
+
+            // Secondary requests
+            // Get FUEL details if settlement time has changed - new record available.
+            if (aemo.settlement.tm_min != previous_period) {
+
+                // Fetch JSON file
+                out_buf.data = malloc(16384);
+                out_buf.pos = 0; // Reset buffer
+	            res = http_json_request_fuel(&out_buf);
+	            if(res == CURLE_OK) {
                     if (verbose > 0) {
                         // Print a dot each time we make a HTTP request
                         printf(".");
                         fflush(stdout);
                     }
-                    number_tries++;
+                } else {
 
-                    // If HTTP request was successful, parse request
-                    // parse_aemo_request(out_buf.data, &aemo, nemregion);
-                    parse_aemo_request_all(out_buf.data, &aemo_all);
-                    aemo = aemo_all.region[0];
+                }
 
-                    // Set timestamp
-                    time(&now);
-                    localtime_r(&now, &timeinfo);
+                // Save JSON data to file
+                // Relies on main query suscess ti get correct 'settlement_time_tag'
+                if (logjsondata) {
+                    snprintf(file_path, 200, "%s/%s/%s.json",
+                             jsondatadir,
+                             "FUEL",
+                             (char *)&settlement_time_tag
+                             );
 
-                    aemo.timestamp.tm_year = timeinfo.tm_year;
-                    aemo.timestamp.tm_mon  = timeinfo.tm_mon;
-                    aemo.timestamp.tm_mday = timeinfo.tm_mday;
-                    aemo.timestamp.tm_hour = timeinfo.tm_hour;
-                    aemo.timestamp.tm_min  = timeinfo.tm_min;
-                    aemo.timestamp.tm_sec  = timeinfo.tm_sec;
-                    for (int i=0; i<MAX_REGIONS; i++) {
-                        aemo_all.region[i].timestamp.tm_year = timeinfo.tm_year;
-                        aemo_all.region[i].timestamp.tm_mon  = timeinfo.tm_mon;
-                        aemo_all.region[i].timestamp.tm_mday = timeinfo.tm_mday;
-                        aemo_all.region[i].timestamp.tm_hour = timeinfo.tm_hour;
-                        aemo_all.region[i].timestamp.tm_min  = timeinfo.tm_min;
-                        aemo_all.region[i].timestamp.tm_sec  = timeinfo.tm_sec;
-                    }
+                    write_json_data_to_file(file_path, out_buf.data);
+                }
+                free(out_buf.data);
+            }
 
-                    if (aemo.settlement.tm_min != previous_period) {
-	                    // Settlement time has changed - new record received
-	                    previous_period = aemo.settlement.tm_min;
+            if (aemo.settlement.tm_min != previous_period) {
+	            // Settlement time has changed - new record received
+	            // All prevous queries have been done. Update time stamp.
+                previous_period = aemo.settlement.tm_min;
+            }
 
-                        if (verbose >= 1) {
-                            printf("\n");
-                        };
+        default:
+		    // No luck, we will try again in five seconds
+		    sleep(DELAY_RETRY);
+			break;
+		}
 
-                        if (verbose >= 2) {
-                            printf("# %04d-%02d-%02d %02d:%02d:%02d ",
-                                   aemo.timestamp.tm_year + 1900,
-                                   aemo.timestamp.tm_mon + 1,
-                                   aemo.timestamp.tm_mday,
-                                   aemo.timestamp.tm_hour,
-                                   aemo.timestamp.tm_min,
-                                   aemo.timestamp.tm_sec);
-                            printf(" %s", aemo.region);
-                            print_aemo_data(&aemo);
-                        }
-
-                        format_time((char *)&settlement_time, &(aemo.settlement));
-                        format_time_tag((char *)&settlement_time_tag, &(aemo.settlement));
-
-                        // Print_aemo_data_record(&aemo);
-                        print_aemo_all_data_record(&aemo_all);
-
-                        if (logtofile) log_prices_file(fhandle, &aemo, number_tries);
-                        if (logtomqtt) log_prices_mqtt(client, mqtttopic, &aemo);
-                        if (logtosqlite) {
-                            aemo_all.number_tries = number_tries;
-                            log_aemo_all_sqlite3(db, &aemo_all);
-                        }
-
-                        // Save JSON data to file
-                        if (logjsondata) {
-                            snprintf(file_path, 110, "%s/%s.json",
-                                     jsondatadir,
-                                     (char *)&settlement_time_tag
-                                     );
-
-                            write_json_data_to_file(file_path, out_buf.data);
-                        }
-
-	                    // Success, go back to IDLE
-	                    state = IDLE;
-                    }
-			    }
-			    // No luck, we will try again in five seconds
-			    sleep(DELAY_RETRY);
-			    break;
-		    }
-		    sleep(DELAY_LOOP);
-	    }
+		sleep(DELAY_LOOP);
+	}
 
 	printf("\nClosing...\n");
 	if (logtofile) fclose(fhandle);
